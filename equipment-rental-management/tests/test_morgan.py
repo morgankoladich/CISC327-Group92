@@ -36,3 +36,22 @@ def test_equipment_creation_list_and_detail(client):
     assert client.get("/equipment/999").status_code == 404
 
 
+def test_equipment_update_is_saved(client):
+    item_id = add_equipment(client)
+    updated = client.put(
+        f"/equipment/{item_id}", json={"name": "Touring Kayak", "total_units": 4}
+    )
+    assert updated.status_code == 200
+    assert client.get(f"/equipment/{item_id}").get_json()["name"] == "Touring Kayak"
+    assert client.get(f"/equipment/{item_id}").get_json()["total_units"] == 4
+    assert client.put("/equipment/999", json={"name": "X"}).status_code == 404
+
+
+def test_equipment_deletion_removes_item(client):
+    item_id = add_equipment(client)
+    assert client.delete(f"/equipment/{item_id}").status_code == 204
+    assert client.get("/equipment").get_json() == []
+    assert client.get(f"/equipment/{item_id}").status_code == 404
+    assert client.delete(f"/equipment/{item_id}").status_code == 404
+
+
