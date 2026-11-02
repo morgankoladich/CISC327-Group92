@@ -122,3 +122,27 @@ def test_deposit_release_requires_return_and_is_saved(client):
     assert stored["deposit_released"] is True
 
 
+def test_overdue_endpoint_returns_only_open_past_due_rentals(client):
+    """FR-20: owner sees genuinely overdue, unreturned gear."""
+    renter_id = add_renter(client)
+    first_id = add_equipment(client, "Old rental")
+    second_id = add_equipment(client, "Future rental")
+    overdue_id = add_rental(client, first_id, renter_id)
+    add_rental(client, second_id, renter_id)
+    store.rentals[overdue_id].due_date = date.today() - timedelta(days=1)
+    response = client.get("/rentals/overdue")
+    assert response.status_code == 200
+    assert [r["id"] for r in response.get_json()] == [overdue_id]
+
+
+def test_overdue_excludes_returned_and_due_today(client):
+    """A returned rental or one due today must not appear as overdue."""
+    renter_id = add_renter(client)
+    old_item = add_equipment(client, "Old rental")
+    today_item = add_equipment(client, "Due today")
+    old_id = add_rental(client, old_item, renter_id)
+    today_id = add_rental(client, today_item, renter_id)
+    store.rentals[old_id].due_date = date.today() - timedelta(days=2)
+    store.rentals[today_id].due_date = date.today()
+    assert client.put(f"/rentals/{old_id}/return").status_code == 200
+    assert client.get("/rentals/overdue").get_json() == []
