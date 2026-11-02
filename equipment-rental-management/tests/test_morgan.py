@@ -89,3 +89,54 @@ def test_checkout_then_return_restores_stock(client):
     assert client.put("/rentals/999/return").status_code == 404
 
 
+def test_checkout_missing_equipment_or_renter_is_rejected(client):
+    renter_id = add_renter(client)
+    assert client.post(
+        "/rentals", json={"equipment_id": 999, "renter_id": renter_id}
+    ).status_code == 404
+    item_id = add_equipment(client)
+    assert client.post(
+        "/rentals", json={"equipment_id": item_id, "renter_id": 999}
+    ).status_code == 404
+    assert client.get(f"/equipment/{item_id}").get_json()["available_units"] == 2
+
+
+def test_out_of_service_equipment_cannot_be_checked_out(client):
+    """FR-18: taking gear out of service must block subsequent checkout."""
+    item_id = add_equipment(client)
+    renter_id = add_renter(client)
+    assert client.patch(
+        f"/equipment/{item_id}/status", json={"is_available": False}
+    ).status_code == 200
+    response = client.post(
+        "/rentals", json={"equipment_id": item_id, "renter_id": renter_id}
+    )
+    assert response.status_code == 400
+    assert client.get("/rentals").get_json() == []
+    assert client.get(f"/equipment/{item_id}").get_json()["available_units"] == 2
+
+
+def test_checkout_rejects_zero_stock(client):
+    """Checkout should not create negative inventory after the final unit."""
+    item_id = add_equipment(client, units=1)
+    renter_id = add_renter(client)
+    payload = {"equipment_id": item_id, "renter_id": renter_id}
+    assert client.post("/rentals", json=payload).status_code == 201
+    response = client.post("/rentals", json=payload)
+    assert response.status_code == 400
+    assert client.get(f"/equipment/{item_id}").get_json()["available_units"] == 0
+    assert len(client.get("/rentals").get_json()) == 1
+
+
+def test_web_checkout_respects_out_of_service_status(client):
+    """FR-18 must also hold when a clerk uses the browser form."""
+    item_id = add_equipment(client)
+    renter_id = add_renter(client)
+    client.patch(f"/equipment/{item_id}/status", json={"is_available": False})
+    response = client.post(
+        "/ui/rentals",
+        data={"equipment_id": str(item_id), "renter_id": str(renter_id)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert client.get("/rentals").get_json() == []
