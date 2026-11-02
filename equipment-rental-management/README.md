@@ -47,6 +47,8 @@ app working without a REST client, and calls the same in-memory store.
 | GET | `/equipment/<id>` | Get one equipment item |
 | PUT | `/equipment/<id>` | Update an equipment item |
 | DELETE | `/equipment/<id>` | Delete an equipment item |
+| PATCH | `/equipment/<id>/status` | Mark equipment available or out of service (`is_available`) |
+| GET | `/equipment/<id>/availability` | Show available units and service status |
 | GET | `/renters` | List all renters |
 | POST | `/renters` | Create a renter |
 | GET | `/renters/<id>` | Get one renter |
@@ -56,9 +58,12 @@ app working without a REST client, and calls the same in-memory store.
 | PUT | `/rentals/<id>/return` | Return rented equipment |
 | GET | `/rentals?renter_id=&equipment_id=` | Look up rentals |
 
+Checkout rejects unknown renters, out-of-service equipment, and equipment with
+no units left. The browser checkout form follows the same availability rules.
+
 ## Tests
 
 ```bash
-pytest
+python -m pytest -v
 ```
 
