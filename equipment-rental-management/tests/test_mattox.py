@@ -42,3 +42,35 @@ def test_renter_create_list_and_detail(client):
     assert client.get("/renters/999").status_code == 404
 
 
+def test_renter_update_is_saved(client):
+    renter_id = add_renter(client)
+    updated = client.put(
+        f"/renters/{renter_id}", json={"email": "new@example.com"}
+    )
+    assert updated.status_code == 200
+    assert client.get(f"/renters/{renter_id}").get_json()["email"] == "new@example.com"
+    assert client.get(f"/renters/{renter_id}").get_json()["name"] == "Sam Lee"
+    assert client.put("/renters/999", json={"name": "X"}).status_code == 404
+
+
+def test_renter_deletion_clears_record(client):
+    renter_id = add_renter(client)
+    assert client.delete(f"/renters/{renter_id}").status_code == 204
+    assert client.get("/renters").get_json() == []
+    assert client.get(f"/renters/{renter_id}").status_code == 404
+    assert client.delete(f"/renters/{renter_id}").status_code == 404
+
+
+def test_rental_list_and_equipment_filter(client):
+    renter_id = add_renter(client)
+    tent_id = add_equipment(client, "Tent")
+    bike_id = add_equipment(client, "Bike")
+    tent_rental = add_rental(client, tent_id, renter_id)
+    add_rental(client, bike_id, renter_id)
+    all_rentals = client.get("/rentals")
+    assert all_rentals.status_code == 200
+    assert len(all_rentals.get_json()) == 2
+    filtered = client.get(f"/rentals?equipment_id={tent_id}")
+    assert [r["id"] for r in filtered.get_json()] == [tent_rental]
+
+
