@@ -57,9 +57,13 @@ app working without a REST client, and calls the same in-memory store.
 | POST | `/rentals` | Check out equipment (`equipment_id`, `renter_id`) |
 | PUT | `/rentals/<id>/return` | Return rented equipment |
 | GET | `/rentals?renter_id=&equipment_id=` | Look up rentals |
+| GET | `/rentals/overdue` | List unreturned rentals with a due date before today |
+| PUT | `/rentals/<id>/extend` | Extend an active rental (`days`) |
+| PUT | `/rentals/<id>/deposit/release` | Release a deposit after the rental is returned |
 
 Checkout rejects unknown renters, out-of-service equipment, and equipment with
 no units left. The browser checkout form follows the same availability rules.
+The overdue endpoint excludes already returned rentals and rentals due today.
 
 ## Tests
 
