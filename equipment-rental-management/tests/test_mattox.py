@@ -74,3 +74,51 @@ def test_rental_list_and_equipment_filter(client):
     assert [r["id"] for r in filtered.get_json()] == [tent_rental]
 
 
+def test_rental_filter_by_renter_id(client):
+    """FR-11: a customer should get only their own rental records."""
+    renter_a = add_renter(client, "Alex", "alex@example.com")
+    renter_b = add_renter(client, "Blair", "blair@example.com")
+    item_a = add_equipment(client, "Kayak")
+    item_b = add_equipment(client, "Helmet")
+    rental_a = add_rental(client, item_b, renter_a)
+    add_rental(client, item_a, renter_b)
+    filtered = client.get(f"/rentals?renter_id={renter_a}")
+    assert filtered.status_code == 200
+    assert [r["id"] for r in filtered.get_json()] == [rental_a]
+
+
+def test_extension_changes_due_date_and_preserves_rental(client):
+    renter_id = add_renter(client)
+    item_id = add_equipment(client)
+    rental_id = add_rental(client, item_id, renter_id)
+    original = next(r for r in client.get("/rentals").get_json() if r["id"] == rental_id)
+    response = client.put(f"/rentals/{rental_id}/extend", json={"days": 3})
+    assert response.status_code == 200
+    expected = date.fromisoformat(original["due_date"]) + timedelta(days=3)
+    assert response.get_json()["due_date"] == expected.isoformat()
+    assert client.get("/rentals").get_json()[0]["due_date"] == expected.isoformat()
+
+
+def test_extension_rejects_returned_or_missing_rentals(client):
+    renter_id = add_renter(client)
+    item_id = add_equipment(client)
+    rental_id = add_rental(client, item_id, renter_id)
+    assert client.put(f"/rentals/{rental_id}/return").status_code == 200
+    assert client.put(f"/rentals/{rental_id}/extend", json={"days": 2}).status_code == 400
+    assert client.put("/rentals/999/extend", json={"days": 2}).status_code == 404
+
+
+def test_deposit_release_requires_return_and_is_saved(client):
+    renter_id = add_renter(client)
+    item_id = add_equipment(client)
+    rental_id = add_rental(client, item_id, renter_id, deposit=50.0)
+    assert client.put(f"/rentals/{rental_id}/deposit/release").status_code == 400
+    assert client.put(f"/rentals/{rental_id}/return").status_code == 200
+    released = client.put(f"/rentals/{rental_id}/deposit/release")
+    assert released.status_code == 200
+    assert released.get_json()["deposit_released"] is True
+    stored = next(r for r in client.get("/rentals").get_json() if r["id"] == rental_id)
+    assert stored["deposit_amount"] == 50.0
+    assert stored["deposit_released"] is True
+
+
