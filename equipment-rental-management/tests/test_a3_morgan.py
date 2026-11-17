@@ -167,3 +167,76 @@ def test_web_return_sends_confirmation_notification(client):
         "Equipment Return Confirmation",
         f"Hi Alex Green, your rental #{rental_id} has been returned successfully.",
     )
+def test_failed_notification_does_not_prevent_return(client):
+    """A failed notification must not stop a valid equipment return."""
+
+    equipment_id, rental_id = create_rental(client)
+
+    with patch(
+        "app.routes.rentals.send_notification",
+        return_value=False,
+    ) as mock_notification:
+        response = client.put(f"/rentals/{rental_id}/return")
+
+    assert response.status_code == 200
+    assert response.get_json()["return_date"] == date.today().isoformat()
+
+    equipment = client.get(f"/equipment/{equipment_id}")
+    assert equipment.get_json()["available_units"] == 1
+
+    mock_notification.assert_called_once()
+
+
+def test_invalid_rental_does_not_send_notification(client):
+    """Returning a nonexistent rental must not send a notification."""
+
+    with patch(
+        "app.routes.rentals.send_notification"
+    ) as mock_notification:
+        response = client.put("/rentals/999999/return")
+
+    assert response.status_code == 404
+    mock_notification.assert_not_called()
+
+
+def test_duplicate_return_does_not_send_notification(client):
+    """Returning the same rental twice must not send a second notification."""
+
+    _, rental_id = create_rental(client)
+
+    with patch(
+        "app.routes.rentals.send_notification",
+        return_value=True,
+    ) as mock_notification:
+
+        first_response = client.put(f"/rentals/{rental_id}/return")
+        assert first_response.status_code == 200
+
+        mock_notification.reset_mock()
+
+        second_response = client.put(f"/rentals/{rental_id}/return")
+
+        assert second_response.status_code == 400
+        mock_notification.assert_not_called()
+
+
+def test_failed_web_notification_does_not_prevent_return(client):
+    """A website rental return succeeds even if its notification fails."""
+
+    equipment_id, rental_id = create_rental(client)
+
+    with patch(
+        "app.routes.views.send_notification",
+        return_value=False,
+    ) as mock_notification:
+        response = client.post(f"/ui/rentals/{rental_id}/return")
+
+    assert response.status_code == 302
+
+    rental = client.get("/rentals").get_json()[0]
+    assert rental["return_date"] == date.today().isoformat()
+
+    equipment = client.get(f"/equipment/{equipment_id}")
+    assert equipment.get_json()["available_units"] == 1
+
+    mock_notification.assert_called_once()
