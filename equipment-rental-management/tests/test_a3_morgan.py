@@ -147,3 +147,23 @@ def test_web_forms_complete_rental_workflow(client):
 
     assert client.get("/equipment").get_json() == []
     assert client.get("/renters").get_json() == []
+
+def test_web_return_sends_confirmation_notification(client):
+    """Returning equipment through the website sends a confirmation."""
+
+    _, rental_id = create_rental(client)
+
+    with patch(
+        "app.routes.views.send_notification",
+        return_value=True,
+    ) as mock_notification:
+
+        response = client.post(f"/ui/rentals/{rental_id}/return")
+
+    assert response.status_code == 302
+
+    mock_notification.assert_called_once_with(
+        "alex@example.com",
+        "Equipment Return Confirmation",
+        f"Hi Alex Green, your rental #{rental_id} has been returned successfully.",
+    )

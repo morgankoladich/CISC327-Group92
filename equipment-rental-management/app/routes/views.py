@@ -6,6 +6,7 @@ from app import store
 from app.models.equipment import Equipment
 from app.models.renter import Renter
 from app.models.rental import Rental
+from notification_service import send_notification
 
 views_bp = Blueprint("views", __name__)
 
@@ -82,9 +83,20 @@ def rentals_page():
 @views_bp.route("/ui/rentals/<int:rental_id>/return", methods=["POST"])
 def return_rental_page(rental_id):
     rental = store.rentals.get(rental_id)
+
     if rental is not None and rental.return_date is None:
         rental.return_date = date.today()
+
         item = store.equipment.get(rental.equipment_id)
         if item is not None:
             item.available_units += 1
+
+        renter = store.renters.get(rental.renter_id)
+        if renter is not None:
+            send_notification(
+                renter.email,
+                "Equipment Return Confirmation",
+                f"Hi {renter.name}, your rental #{rental.id} has been returned successfully.",
+            )
+
     return redirect(url_for("views.rentals_page"))
