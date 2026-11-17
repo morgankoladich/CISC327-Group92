@@ -76,3 +76,74 @@ def test_return_notification_has_correct_details(client):
             "Equipment Return Confirmation",
             f"Hi Alex Green, your rental #{rental_id} has been returned successfully.",
         )
+def test_web_pages_load_successfully(client):
+    """All four main web pages should be accessible."""
+
+    for url in ["/", "/ui/equipment", "/ui/renters", "/ui/rentals"]:
+        response = client.get(url)
+        assert response.status_code == 200
+
+
+def test_web_forms_complete_rental_workflow(client):
+    """Create, rent, return, and delete records through the web interface."""
+
+    equipment_response = client.post(
+        "/ui/equipment",
+        data={
+            "name": "Camping Tent",
+            "category": "Camping",
+            "total_units": "2",
+        },
+        follow_redirects=True,
+    )
+    assert equipment_response.status_code == 200
+
+    equipment = client.get("/equipment").get_json()
+    assert len(equipment) == 1
+    equipment_id = equipment[0]["id"]
+
+    renter_response = client.post(
+        "/ui/renters",
+        data={
+            "name": "Sam Rivera",
+            "email": "sam@example.com",
+        },
+        follow_redirects=True,
+    )
+    assert renter_response.status_code == 200
+
+    renters = client.get("/renters").get_json()
+    assert len(renters) == 1
+    renter_id = renters[0]["id"]
+
+    checkout = client.post(
+        "/ui/rentals",
+        data={
+            "equipment_id": str(equipment_id),
+            "renter_id": str(renter_id),
+        },
+        follow_redirects=True,
+    )
+    assert checkout.status_code == 200
+
+    rentals = client.get("/rentals").get_json()
+    assert len(rentals) == 1
+    rental_id = rentals[0]["id"]
+
+    returned = client.post(
+        f"/ui/rentals/{rental_id}/return",
+        follow_redirects=True,
+    )
+    assert returned.status_code == 200
+
+    rental = client.get("/rentals").get_json()[0]
+    assert rental["return_date"] == date.today().isoformat()
+
+    equipment_after_return = client.get(f"/equipment/{equipment_id}")
+    assert equipment_after_return.get_json()["available_units"] == 2
+
+    client.post(f"/ui/equipment/{equipment_id}/delete")
+    client.post(f"/ui/renters/{renter_id}/delete")
+
+    assert client.get("/equipment").get_json() == []
+    assert client.get("/renters").get_json() == []
